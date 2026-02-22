@@ -1,0 +1,2 @@
+Descripción: Escribe un programa en el que se realice el parpadeo de un led de la siguiente
+forma, 1 segundo encendido y 2 segundos apagado.
