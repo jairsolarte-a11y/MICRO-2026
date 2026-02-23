@@ -1,0 +1,29 @@
+### HEXMate logfile and output summary ###
+
+### Command-line arguments ###
+ C:\Users\JOHAN\AppData\Local\Temp\xcAs1dc.0\driver_tmp_3.o
+ -Odist/default/debug\Led_blink_1.X.debug.hex
+ -logfile=dist/default/debug\Led_blink_1.X.debug.hxl
+ -addressing=1
+ -break=300000
+
+### Memory Usage ###
+ Input file ranges:
+  7F94h - 7FFFh		(C:\Users\JOHAN\AppData\Local\Temp\xcAs1dc.0\driver_tmp_3.o)
+ Unused ranges:
+  0h - 7F93h
+
+### Hex Memory Map ###
+ Legend:
+  -- = Unused memory
+  H1 = Input file             (C:\Users\JOHAN\AppData\Local\Temp\xcAs1dc.0\driver_tmp_3.o)
+----------------------------------------------------------
+         | 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F
+----------------------------------------------------------
+00007F90 | -- -- -- -- H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1
+00007FA0 | H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1
+00007FB0 | H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1
+00007FC0 | H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1
+00007FD0 | H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1
+00007FE0 | H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1
+00007FF0 | H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1 H1
