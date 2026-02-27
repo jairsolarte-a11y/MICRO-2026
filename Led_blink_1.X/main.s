@@ -1,6 +1,9 @@
         ;Ejercicio 1: Escribe un programa en el que se realice el parpadeo de un led de la siguiente
         ;forma, 1 segundo encendido y 2 segundos apagado.
 	; primer paso el led parpadea, pero se ha ajustado los tiempo
+	
+	; tercer cambio
+	
 	PROCESSOR 18F4550
         #include <xc.inc>
 
@@ -38,6 +41,12 @@ main:
 	;-----------------------------------------------
         ; RD0 salida
         bcf     LED_TRIS, LED_BIT, c
+
+        ; (CAMBIO) Estado inicial: LED apagado (activo-alto)
+        bcf     LED_LAT, LED_BIT, c
+
+	; (CAMBIO) quitamos este call porque delay_off aún no existía y aquí no ayuda
+	;call delay_off    ; aqui se controla linea agregada (1 cambio)
 	
 ;===================================
 ;BUCLE INFINITO
@@ -47,19 +56,24 @@ blink:
         ;----------------------------------------
 	;cambiar el estado del led
 	;-----------------------------------------
-        ; LED (cambia de estado)
-        btg     LED_LAT, LED_BIT, c
 
-        ;----------------------------------------
-	;retardo por software
-	;-----------------------------------------
-	; el parpadeo es visible en led
-        call    delay_sw
+        
+        ; LED ON (activo-alto: 1 enciende)
+        bsf     LED_LAT, LED_BIT, c
+        call    delay_on          ; (AGREGO) 1 segundo aprox
+
+        ; LED OFF (activo-alto: 0 apaga)
+        bcf     LED_LAT, LED_BIT, c
+        call    delay_off         ; (AGREGO) 2 segundos aprox
 
 	;repeticion infinita
         goto    blink
 
 ;  parpadeo
+	;=======================
+	;cambio de codigo
+	;===================================
+	
 delay_sw:
         ;-------------------------------------------------
 	;cargar contador externo
@@ -89,5 +103,21 @@ d2:     decfsz  0x21, f, c    ;decrementa; si queda en 0satlta la siguiente inst
         ; 5) Ambos contadores llegaron a 0 => termina el retardo
         ;------------------------------------------------------------
 	return
+
+;=========================================================
+; (AGREGO) delays con relación 1s ON y 2s OFF (aproximado)
+; - En esta etapa NO son exactos: se basan en delay_sw
+; - delay_on  = 1 * delay_sw
+; - delay_off = 2 * delay_sw
+;=========================================================
+
+delay_on:
+        call    delay_sw
+        return
+
+delay_off:
+        call    delay_sw
+        call    delay_sw
+        return
 
         END resetVec
