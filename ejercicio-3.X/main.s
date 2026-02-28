@@ -2,7 +2,7 @@
 ; PRACTICA 1 - PUNTO 3
 ; PIC18F4550 -
 ; Autor: JAIR ANDRES SOLARTE ORTIZ 
-; Compilador: MPLAB X IDE - XC8 Assembler
+; Compilador: MPLAB
 ;========================================================================
 
 
