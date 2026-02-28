@@ -1,15 +1,17 @@
+        ;=============================================================
         ;Ejercicio 1: Escribe un programa en el que se realice el parpadeo de un led de la siguiente
         ;forma, 1 segundo encendido y 2 segundos apagado.
-	; primer paso el led parpadea, pero se ha ajustado los tiempo
-	
-	; tercer cambio
-	
-	PROCESSOR 18F4550
+        ;
+        ; - Parpadeo usando Timer1 con tick fijo (10ms)
+        ; - Solo se cambian valores de ON_TICKS y OFF_TICKS para variar tiempos
+        ;=============================================================
+
+        PROCESSOR 18F4550
         #include <xc.inc>
 
-	; Estos "CONFIG" definen cómo arranca el PIC 
-        CONFIG  FOSC = INTOSCIO_EC 
-        CONFIG  WDT = OFF  
+        ; Estos "CONFIG" definen cómo arranca el PIC 
+        CONFIG  FOSC = INTOSCIO_EC
+        CONFIG  WDT = OFF
         CONFIG  LVP = OFF
         CONFIG  PBADEN = OFF
         CONFIG  MCLRE = ON
@@ -18,106 +20,190 @@
 #define LED_LAT  LATD
 #define LED_BIT  0
 
-	;reset
+       
+#define TMR1_PRELOAD_H  0xF6
+#define TMR1_PRELOAD_L  0x3C
+
+        ;=============================================================
+        ; TIEMPOS (EN TICKS DE 10ms)
+        ; 
+        ;   1s  = 100 ticks
+        ;   2s  = 200 ticks
+        ;=============================================================
+#define ON_TICKS_H      0x00
+#define ON_TICKS_L      0x64    ; 100
+
+#define OFF_TICKS_H     0x00
+#define OFF_TICKS_L     0xC8    ; 200
+
+
+;===============================================================================
+; reset
+;===============================================================================
 PSECT resetVec, class=CODE, reloc=2
 resetVec:
         goto    main
-	
-;================================================
-;codigo pincipal
-;=============================================
 
+
+;===============================================================================
+; Variables (Access RAM)
+;===============================================================================
+PSECT udata_acs
+cntH:   DS 1
+cntL:   DS 1
+
+
+;===============================================================================
+; codigo principal
+;===============================================================================
 PSECT code, class=CODE, reloc=2
+
 main:
         ;-------------------------------------------
-	; poner los pines analogicos como digitales
-	;----------------------------------------------
-        
+        ; poner los pines analogicos como digitales
+        ;-------------------------------------------
         movlw   0x0F
         movwf   ADCON1, c
 
-	;-----------------------------------
-	; configurar el pin del led como salida
-	;-----------------------------------------------
+        ;-------------------------------------------
+        ; Oscilador interno 8MHz
+        ;-------------------------------------------
+        movlw   0x72
+        movwf   OSCCON, c
+
+wait_osc:
+        btfss   OSCCON, 2, c       ; IOFS
+        goto    wait_osc
+
+        ;-------------------------------------------
+        ; configurar el pin del led como salida
+        ;-------------------------------------------
         ; RD0 salida
         bcf     LED_TRIS, LED_BIT, c
 
-        ; (CAMBIO) Estado inicial: LED apagado (activo-alto)
+        ;-------------------------------------------
+        ; estado inicial del led (apagado)
+        ;-------------------------------------------
         bcf     LED_LAT, LED_BIT, c
 
-	; (CAMBIO) quitamos este call porque delay_off aún no existía y aquí no ayuda
-	;call delay_off    ; aqui se controla linea agregada (1 cambio)
-	
-;===================================
-;BUCLE INFINITO
-;===============================================
+        ;-------------------------------------------
+     
+        ;-------------------------------------------
+        movlw   0xB0
+        movwf   T1CON, c
 
+
+;===================================
+; BUCLE INFINITO
+;===================================
 blink:
         ;----------------------------------------
-	;cambiar el estado del led
-	;-----------------------------------------
-
-        
-        ; LED ON (activo-alto: 1 enciende)
+        ; LED encendido por 1 segundo (100 ticks)
+        ;----------------------------------------
         bsf     LED_LAT, LED_BIT, c
-        call    delay_on          ; (AGREGO) 1 segundo aprox
 
-        ; LED OFF (activo-alto: 0 apaga)
+        movlw   ON_TICKS_H
+        movwf   cntH, c
+        movlw   ON_TICKS_L
+        movwf   cntL, c
+        call    delay_ticks16
+
+        ;----------------------------------------
+        ; LED apagado por 2 segundos (200 ticks)
+        ;----------------------------------------
         bcf     LED_LAT, LED_BIT, c
-        call    delay_off         ; (AGREGO) 2 segundos aprox
 
-	;repeticion infinita
+        movlw   OFF_TICKS_H
+        movwf   cntH, c
+        movlw   OFF_TICKS_L
+        movwf   cntL, c
+        call    delay_ticks16
+
+        ;repeticion infinita
         goto    blink
 
-;  parpadeo
-	;=======================
-	;cambio de codigo
-	;===================================
-	
-delay_sw:
-        ;-------------------------------------------------
-	;cargar contador externo
-	;----------------------------------
+
+;===============================================================================
+; retardo por ticks (16-bit)
+; - cntH:cntL = cantidad de ticks
+; - 1 tick = 10ms (delay_10ms_timer1)
+;===============================================================================
+delay_ticks16:
+        ;-------------------------------------------
+        ; si el contador es 0, termina
+        ;-------------------------------------------
+        movf    cntH, w, c
+        iorwf   cntL, w, c
+        btfsc   STATUS, 2, c       ; Z=1
+        return
+
+dt_loop:
+        ;-------------------------------------------
+        ; retardo base (10ms)
+        ;-------------------------------------------
+        call    delay_10ms_timer1
+
+        ;-------------------------------------------
+        ; decremento 16-bit del contador cntH:cntL
+        ;-------------------------------------------
+        movf    cntL, w, c
+        btfss   STATUS, 2, c       ; si cntL != 0
+        goto    dec_low
+
+        ; cntL == 0: borrow -> cntH-- y cntL = 0xFF
+        decf    cntH, f, c
         movlw   0xFF
-        movwf   0x20, c        ; usa una dirección en access RAM
+        movwf   cntL, c
+        goto    dt_check
 
-	;------------------------------
-	;cargar el cargador interno
-	;-----------------------------------
-d1:     movlw   0xFF
-        movwf   0x21, c
-	
-	;---------------------------------------
-	;bucle interno
-	;--------------------------------
-d2:     decfsz  0x21, f, c    ;decrementa; si queda en 0satlta la siguiente instruccion 
-        goto    d2            ; si no llego a 0, sigue dando vueltas
-       
-	;---------------------------------------------------------------
-	;cuando el contador llega a 0, decrementa contador 1
-	;-------------------------------------------------------------
-	decfsz  0x20, f, c
-        goto    d1        ;si contador1 no llegó a 0, repite otro ciclo completo
-       
-	 ;-----------------------------------------------------------
-        ; 5) Ambos contadores llegaron a 0 => termina el retardo
-        ;------------------------------------------------------------
-	return
+dec_low:
+        decf    cntL, f, c
 
-;=========================================================
-; (AGREGO) delays con relación 1s ON y 2s OFF (aproximado)
-; - En esta etapa NO son exactos: se basan en delay_sw
-; - delay_on  = 1 * delay_sw
-; - delay_off = 2 * delay_sw
-;=========================================================
-
-delay_on:
-        call    delay_sw
+dt_check:
+        ;-------------------------------------------
+        ; mientras contador != 0, seguir
+        ;-------------------------------------------
+        movf    cntH, w, c
+        iorwf   cntL, w, c
+        btfss   STATUS, 2, c
+        goto    dt_loop
         return
 
-delay_off:
-        call    delay_sw
-        call    delay_sw
+
+;===============================================================================
+; delay_10ms con Timer1
+; - preload -> overflow -> apaga timer
+;===============================================================================
+delay_10ms_timer1:
+        ;-------------------------------------------
+        ; preload del Timer1
+        ;-------------------------------------------
+        movlw   TMR1_PRELOAD_H
+        movwf   TMR1H, c
+        movlw   TMR1_PRELOAD_L
+        movwf   TMR1L, c
+
+        ;-------------------------------------------
+     
+        ;-------------------------------------------
+        bcf     PIR1, 0, c
+
+        ;-------------------------------------------
+        ; encender Timer1
+        ;-------------------------------------------
+        bsf     T1CON, 0, c
+
+wait_ov:
+        ;-------------------------------------------
+        ; esperar overflow
+        ;-------------------------------------------
+        btfss   PIR1, 0, c
+        goto    wait_ov
+
+        ;-------------------------------------------
+        ; apagar Timer1
+        ;-------------------------------------------
+        bcf     T1CON, 0, c
         return
 
-        END resetVec
+        END     resetVec
