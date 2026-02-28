@@ -5,14 +5,16 @@
 # 1 "<command line>" 1
 # 1 "<built-in>" 2
 # 1 "main.s" 2
-;========================================================================
-; PRACTICA 1 - PUNTO 3
-; PIC18F4550 - 4 Secuencias con botón usando INT0
-; Oscilador interno 8 MHz
-; Ensamblador: PIC-AS (XC8 v3.x)
-;========================================================================
+;========================================================
+; 4 Secuencias de LEDs con dos botones
+; PIC18F4550 – 8 MHz interno
+; RB0 cambia la secuencia
+; RB1 aumenta la velocidad
+; Los LEDs están conectados en RD0–RD3
+; Inicio del progrma
 
-        processor PIC18F4550
+;========================================================
+
 # 1 "C:\\Program Files\\Microchip\\xc8\\v3.10\\pic\\include/xc.inc" 1 3
 
 
@@ -5450,183 +5452,50 @@ stk_offset SET 0
 auto_size SET 0
 ENDM
 # 6 "C:\\Program Files\\Microchip\\xc8\\v3.10\\pic\\include/xc.inc" 2 3
-# 10 "main.s" 2
+# 12 "main.s" 2
 
-;========================
-; CONFIGURACION
-;========================
+        ; Configuración básica del microcontrolador
+        CONFIG FOSC = INTOSCIO_EC ; Usamos el oscilador interno
+        CONFIG WDT = OFF ; Desactivamos el Watchdog (temporizador)
+        CONFIG LVP = OFF ; Desactivamos programación en bajo voltaje
+        CONFIG PBADEN = OFF ; PORTB inicia como digital
+        CONFIG MCLRE = OFF ; El pin MCLR se usa como entrada digital
+        CONFIG XINST = OFF ; Desactivamos instrucciones extendidas
+        CONFIG PWRT = ON ; Activamos temporizador de encendido (más estable)
 
-        CONFIG FOSC = INTOSCIO_EC
-        CONFIG WDT = OFF
-        CONFIG LVP = OFF
-        CONFIG PBADEN = OFF
-        CONFIG MCLRE = OFF
-        CONFIG XINST = OFF
-        CONFIG PWRT = ON
+        ; Vector de reinicio
+        PSECT resetVec,class=CODE,reloc=2
+        ORG 0x00 ; Dirección inicial del programa
+        GOTO INIT ; Saltamos a la rutina principal
 
-;========================
-; VARIABLES
-;========================
-
-PSECT udata
-Secuencia: DS 1
-Cont1: DS 1
-Cont2: DS 1
-
-;========================
-; VECTOR RESET
-;========================
-
-PSECT resetVec,class=CODE,reloc=2
-resetVec:
-        goto INIT
-
-;========================
-; VECTOR INTERRUPCION
-;========================
-
-PSECT intVec,class=CODE,reloc=2
-intVec:
-        goto ISR
-
-;========================
-; CODIGO PRINCIPAL
-;========================
-
-PSECT code
-
+;========================================================
+; Inicio del programa
+;========================================================
 INIT:
-        movlw b'01110010'
-        movwf OSCCON
 
-        movlw b'11110000'
-        movwf TRISD
-        clrf LATD
+        ; Configuramos el oscilador interno a 8 MHz
+        ; Esto define la velocidad a la que trabajará el PIC
+        MOVLW 0b01110010
+        MOVWF OSCCON, a
 
-        bsf TRISB,0
-        bcf INTCON2,6
-        bcf INTCON,1
-        bsf INTCON,4
-        bsf INTCON,7
+        ; Configuramos todos los pines como digitales
+        ; Así evitamos que funcionen como entradas analógicas
+        MOVLW 0x0F
+        MOVWF ADCON1, a
 
-        clrf Secuencia
+        ; Configuramos todo el PORTD como salida
+        ; TRISD = 0 significa salida
+        CLRF TRISD, a
 
-MAIN_LOOP:
+        ; Encendemos el LED conectado en ((PORTD) and 0FFh), 0, a
+        ; Escribimos un 1 en el bit 0 del puerto D
+        MOVLW 0x01
+        MOVWF LATD, a
 
-        movf Secuencia,W
-        bz SEQ0
-
-        movlw 1
-        cpfseq Secuencia
-        goto SEQ1
-
-        movlw 2
-        cpfseq Secuencia
-        goto SEQ2
-
-        goto SEQ3
-
-;========================
-; SECUENCIAS
-;========================
-
-SEQ0:
-        movlw b'00000001'
-        movwf LATD
-        call DELAY
-
-        movlw b'00000010'
-        movwf LATD
-        call DELAY
-
-        movlw b'00000100'
-        movwf LATD
-        call DELAY
-
-        movlw b'00001000'
-        movwf LATD
-        call DELAY
-
-        goto MAIN_LOOP
-
-SEQ1:
-        movlw b'00001000'
-        movwf LATD
-        call DELAY
-
-        movlw b'00000100'
-        movwf LATD
-        call DELAY
-
-        movlw b'00000010'
-        movwf LATD
-        call DELAY
-
-        movlw b'00000001'
-        movwf LATD
-        call DELAY
-
-        goto MAIN_LOOP
-
-SEQ2:
-        movlw b'00001111'
-        movwf LATD
-        call DELAY
-
-        clrf LATD
-        call DELAY
-        goto MAIN_LOOP
-
-SEQ3:
-        movlw b'00000001'
-        movwf LATD
-        call DELAY
-
-        movlw b'00000011'
-        movwf LATD
-        call DELAY
-
-        movlw b'00000111'
-        movwf LATD
-        call DELAY
-
-        movlw b'00001111'
-        movwf LATD
-        call DELAY
-        goto MAIN_LOOP
-
-;========================
-; INTERRUPCION
-;========================
-
-ISR:
-        btfss INTCON,1
-        retfie
-
-        bcf INTCON,1
-        incf Secuencia,F
-
-        movlw 4
-        cpfslt Secuencia
-        clrf Secuencia
-
-        retfie
-
-;========================
-; RETARDO
-;========================
-
-DELAY:
-        movlw 0xFF
-        movwf Cont1
-D1:
-        movlw 0xFF
-        movwf Cont2
-D2:
-        decfsz Cont2,F
-        goto D2
-        decfsz Cont1,F
-        goto D1
-        return
+;========================================================
+; Bucle infinito
+;========================================================
+LOOP:
+        GOTO LOOP ; El programa se queda aquí para mantener el LED encendido
 
         END

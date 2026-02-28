@@ -6,7 +6,7 @@ Linker command line:
   --edf=C:\Program Files\Microchip\xc8\v3.10\pic\dat\20250813170317_en.msgs \
   -cs -h+dist/default/debug\ejercicio-3.X.debug.sym \
   --cmf=dist/default/debug\ejercicio-3.X.debug.cmf -z -Q18F4550 \
-  -oC:\Users\ANDRES~1\AppData\Local\Temp\xcAsdqs.0\driver_tmp_3.o \
+  -oC:\Users\ANDRES~1\AppData\Local\Temp\xcAsed0.0\driver_tmp_3.o \
   --fixupoverflow=error -ver=XC8 PIC(R) Assembler --fixupoverflow=lstwarn \
   -Mdist/default/debug/ejercicio-3.X.debug.map -E1 -ACODE=00h-07FFFh \
   -ACONST=00h-07FFFh -ASMALLCONST=0800h-08FFhx120 \
@@ -15,8 +15,8 @@ Linker command line:
   -ABANK1=0100h-01FFh -ABANK2=0200h-02FFh -ABANK3=0300h-03FFh \
   -ABANK4=0400h-04FFh -ABANK5=0500h-05FFh -ABANK6=0600h-06FFh \
   -ABANK7=0700h-07FFh -ASFR=0F60h-0FFFh -ABIGSFR=0F60h-0FFFh \
-  -ACONFIG=0300000h-030000Dh -AIDLOC=0200000h-0200007h \
-  -AEEDATA=0F00000h-0F000FFh build/default/debug/main.o 
+  -AIDLOC=0200000h-0200007h -AEEDATA=0F00000h-0F000FFh \
+  build/default/debug/main.o 
 
 Object code version is 3.11
 
@@ -26,10 +26,12 @@ Machine type is 18F4550
 
                 Name                               Link     Load   Length Selector   Space Scale
 build/default/debug/main.o
-                
+                config                           300000   300000        E        0       4
+                resetVec                           7FEA     7FEA       16     3FF5       0
 
 TOTAL           Name                               Link     Load   Length     Space
         CLASS   CODE           
+                resetVec                           7FEA     7FEA       16         0
 
         CLASS   CONST          
 
@@ -65,44 +67,65 @@ TOTAL           Name                               Link     Load   Length     Sp
 
         CLASS   BIGSFR         
 
-        CLASS   CONFIG         
-
         CLASS   IDLOC          
 
         CLASS   EEDATA         
+
+        CLASS   CONFIG         
+                config                           300000   300000        E         4
 
 
 
 SEGMENTS        Name                           Load    Length   Top    Selector   Space  Class
 
+                resetVec                       007FEA  000016  008000      3FF5       0  CODE    
 
 
 UNUSED ADDRESS RANGES
 
         Name                Unused          Largest block    Delta
-        BANK0            60-FF          A0
-        BANK1            100-1FF         100
-        BANK2            200-2FF         100
-        BANK3            300-3FF         100
-        BANK4            400-4FF         100
-        BANK5            500-5FF         100
-        BANK6            600-6FF         100
-        BANK7            700-7FF         100
-        BIGRAM           0-7FF         800
-        BIGSFR           F60-FFF          A0
-        CODE             0-7FFF        8000
-        COMRAM           0-5F          60
-        CONFIG           300000-30000D           E
-        CONST            0-7FFF        8000
-        EEDATA           F00000-F000FF         100
-        IDLOC            200000-200007           8
-        MEDIUMCONST      800-7FFF        7800
-        RAM              60-7FF         100
-        SFR              F60-FFF          A0
-        SMALLCONST       800-7FFF         100
+        BANK0            000060-0000FF               A0
+        BANK1            000100-0001FF              100
+        BANK2            000200-0002FF              100
+        BANK3            000300-0003FF              100
+        BANK4            000400-0004FF              100
+        BANK5            000500-0005FF              100
+        BANK6            000600-0006FF              100
+        BANK7            000700-0007FF              100
+        BIGRAM           000000-0007FF              800
+        BIGSFR           000F60-000FFF               A0
+        CODE             000000-007FE9             7FEA
+        COMRAM           000000-00005F               60
+        CONST            000000-007FE9             7FEA
+        EEDATA           F00000-F000FF              100
+        IDLOC            200000-200007                8
+        MEDIUMCONST      000800-007FE9             77EA
+        RAM              000060-0007FF              100
+        SFR              000F60-000FFF               A0
+        SMALLCONST       000800-007FE9              100
 
                                   Symbol Table
 
-__H__absolute__ __absolute__ 0  __Hspace_0      (abs)        0
-__L__absolute__ __absolute__ 0  __Lspace_0      (abs)        0
-isa$std         (abs)        1  isa$xinst       (abs)        0
+__H__absolute__ __absolute__ 000000  __Hcode         code         000000
+__Hconfig       config       30000E  __Hdata         data         000000
+__Hedata        edata        000000  __HresetVec     resetVec     000000
+__Hspace_0      (abs)        008000  __Hspace_1      (abs)        000000
+__Hspace_3      (abs)        000000  __Hspace_4      (abs)        60000E
+__Hudata        udata        000000  __Hudata_acs    udata_acs    000000
+__Hudata_bank0  udata_bank0  000000  __Hudata_bank1  udata_bank1  000000
+__Hudata_bank2  udata_bank2  000000  __Hudata_bank3  udata_bank3  000000
+__Hudata_bank4  udata_bank4  000000  __Hudata_bank5  udata_bank5  000000
+__Hudata_bank6  udata_bank6  000000  __Hudata_bank7  udata_bank7  000000
+__L__absolute__ __absolute__ 000000  __Lcode         code         000000
+__Lconfig       config       000000  __Ldata         data         000000
+__Ledata        edata        000000  __LresetVec     resetVec     000000
+__Lspace_0      (abs)        000000  __Lspace_1      (abs)        000000
+__Lspace_3      (abs)        000000  __Lspace_4      (abs)        000000
+__Ludata        udata        000000  __Ludata_acs    udata_acs    000000
+__Ludata_bank0  udata_bank0  000000  __Ludata_bank1  udata_bank1  000000
+__Ludata_bank2  udata_bank2  000000  __Ludata_bank3  udata_bank3  000000
+__Ludata_bank4  udata_bank4  000000  __Ludata_bank5  udata_bank5  000000
+__Ludata_bank6  udata_bank6  000000  __Ludata_bank7  udata_bank7  000000
+__S0            (abs)        008000  __S1            (abs)        000000
+__S3            (abs)        000000  isa$std         (abs)        000001
+isa$xinst       (abs)        000000  
