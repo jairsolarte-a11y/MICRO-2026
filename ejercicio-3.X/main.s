@@ -8,120 +8,146 @@
 	
 ;========================================================
 ;========================================================
-; Dos secuencias básicas con botón RB0
-; 1) movimiento de LEDs
-; 2) Parpadeo de los leds
+; Cambio de secuencia usando interrupción INT0 (RB0)
+; El botón cambia entre:
+;   SEQ0 : Corrimiento de LEDs
+;   SEQ1 : Parpadeo total
 ;========================================================
 
         #include <xc.inc>
 
-       
-        CONFIG  FOSC   = INTOSCIO_EC   ; Usamos el oscilador interno
-        CONFIG  WDT    = OFF           ; Desactivamos el Watchdog
-        CONFIG  LVP    = OFF           ; RB5 como pin normal
-        CONFIG  PBADEN = OFF           ; PORTB inicia como digital
-        CONFIG  MCLRE  = OFF           ; MCLR como entrada digital
+;--------------------------------------------------------
+; CONFIGURACIÓN DEL PIC
+;--------------------------------------------------------
+        CONFIG  FOSC   = INTOSCIO_EC   ; Oscilador interno
+        CONFIG  WDT    = OFF           ; Watchdog desactivado
+        CONFIG  LVP    = OFF           ; RB5 como pin digital
+        CONFIG  PBADEN = OFF           ; PORTB digital
+        CONFIG  MCLRE  = OFF           ; MCLR como pin normal
         CONFIG  XINST  = OFF           ; Sin instrucciones extendidas
         CONFIG  PWRT   = ON            ; Encendido más estable
 
 ;--------------------------------------------------------
-; Reservamos memoria para el retardo y la variable
-; que controlará qué secuencia está activa.
+; VARIABLES EN RAM
 ;--------------------------------------------------------
         PSECT udata_acs
 Delay1:    DS 1          ; Contador lento del retardo
 Delay2:    DS 1          ; Contador rápido del retardo
-Secuencia: DS 1          ; Guarda qué modo está activo
+Secuencia: DS 1          ; Guarda el modo activo (0 o 1)
 
 ;--------------------------------------------------------
-; Vector de inicio del programa
+; VECTOR DE RESET
 ;--------------------------------------------------------
         PSECT resetVec,class=CODE,reloc=2
         ORG 0x00
         GOTO INIT
 
+;--------------------------------------------------------
+; VECTOR DE INTERRUPCIÓN (INT0 está en 0x08)
+;--------------------------------------------------------
+        PSECT intVec,class=CODE,reloc=2
+        ORG 0x08
+        GOTO ISR
+
 ;========================================================
-; Inicialización
+; INICIALIZACIÓN
 ;========================================================
 INIT:
 
-        ; Configuramos el oscilador interno a 8 MHz
+        ; Configuramos oscilador a 8 MHz
         MOVLW   0b01110010
         MOVWF   OSCCON, a
 
-        ; Configuramos todos los pines como digitales
+        ; Todos los pines digitales
         MOVLW   0x0F
         MOVWF   ADCON1, a
 
-        ; PORTD como salida (donde están los LEDs)
+        ; PORTD como salida (LEDs)
         CLRF    TRISD, a
         CLRF    LATD, a
 
-        ; RB0 como entrada (botón)
+        ; RB0 como entrada (botón INT0)
         BSF     TRISB,0,a
 
-        ; Iniciamos en la secuencia 0
+        ; Iniciamos en secuencia 0
         CLRF    Secuencia, a
 
-        ; Encendemos el primer LED como punto inicial
+        ; Encendemos LED inicial
         MOVLW   0x01
         MOVWF   LATD, a
 
+;--------------------------------------------------------
+; CONFIGURACIÓN DE INT0
+;--------------------------------------------------------
+
+        BCF     INTCON2,6,a   ; Interrupción por flanco descendente
+        BCF     INTCON,1,a    ; Limpiamos bandera INT0IF
+        BSF     INTCON,4,a    ; Habilitamos INT0IE
+        BSF     INTCON,7,a    ; Habilitamos interrupciones globales
+
 ;========================================================
-; Programa principal
+; PROGRAMA PRINCIPAL
 ;========================================================
 MAIN:
 
-        ; Si se presiona el botón RB0,
-        ; cambiamos el valor de la variable Secuencia
-        BTFSS   PORTB,0,a
-        INCF    Secuencia,F,a
-
-        ; Solo usamos el bit 0 de la variable,
-        ; así alternamos entre 0 y 1 (dos modos)
+        ; Revisamos qué secuencia está activa
         MOVF    Secuencia,W,a
         ANDLW   0x01
-        BZ      SEQ0       ; Si es 0 → movimiento
-        GOTO    SEQ1       ; Si es 1 → Parpadeo
+        BZ      SEQ0
+        GOTO    SEQ1
 
 ;========================================================
-; SECUENCIA 0 : movimiento  de LEDs
+; SECUENCIA 0 → Corrimiento de LEDs RD0-RD3
 ;========================================================
 SEQ0:
 
-        CALL RETARDO       ; Esperamos antes de mover
+        CALL    RETARDO
 
-        ; Rotamos el contenido hacia la izquierda
-        ; Esto mueve el LED encendido al siguiente
-        RLCF LATD,F,a
+        ; Rotamos hacia la izquierda
+        RLCF    LATD,F,a
 
-        ; Si el corrimiento llega a RD4,
-        ; reiniciamos en RD0
-        BTFSC LATD,4,a
-        MOVLW 0x01
-        MOVWF LATD,a
+        ; Si se sale del rango (llega a RD4)
+        ; reiniciamos en 0001
+        BTFSC   LATD,4,a
+        MOVLW   0x01
+        MOVWF   LATD,a
 
-        GOTO MAIN
+        GOTO    MAIN
 
 ;========================================================
-; SECUENCIA 1 : Parpadeo 
+; SECUENCIA 1 → Parpadeo total
 ;========================================================
 SEQ1:
 
-        ; Encendemos los 4 LEDs
-        MOVLW 0x0F
-        MOVWF LATD,a
-        CALL RETARDO
+        MOVLW   0x0F        ; Encendemos RD0-RD3
+        MOVWF   LATD,a
+        CALL    RETARDO
 
-        ; Apagamos todos
-        CLRF LATD,a
-        CALL RETARDO
+        CLRF    LATD,a      ; Apagamos todos
+        CALL    RETARDO
 
-        GOTO MAIN
+        GOTO    MAIN
 
 ;========================================================
-; Se usan dos contadores anidados para generar una
-; pausa visible sin usar temporizadores internos.
+; RUTINA DE INTERRUPCIÓN
+; Se ejecuta automáticamente cuando se presiona RB0
+;========================================================
+ISR:
+
+        ; Verificamos que sea INT0
+        BTFSS   INTCON,1,a
+        RETFIE
+
+        ; Limpiamos bandera
+        BCF     INTCON,1,a
+
+        ; Cambiamos de secuencia
+        INCF    Secuencia,F,a
+
+        RETFIE
+
+;========================================================
+; SUBRUTINA DE RETARDO POR SOFTWARE
 ;========================================================
 RETARDO:
 
