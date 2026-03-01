@@ -7,43 +7,45 @@
 ; Inicio del progrma
 	
 ;========================================================
-; LED parpadeando con retardo
+;========================================================
+; Dos secuencias básicas con botón RB0
+; 1) movimiento de LEDs
+; 2) Parpadeo de los leds
 ;========================================================
 
-        #include <xc.inc>     ; Librería del compilador para el PIC
+        #include <xc.inc>
 
-        ; Configuración del microcontrolador
-        CONFIG  FOSC   = INTOSCIO_EC   ; Usamos oscilador interno
-        CONFIG  WDT    = OFF           ; Desactivamos Watchdog
-        CONFIG  LVP    = OFF           ; Liberamos RB5 como pin digital
+       
+        CONFIG  FOSC   = INTOSCIO_EC   ; Usamos el oscilador interno
+        CONFIG  WDT    = OFF           ; Desactivamos el Watchdog
+        CONFIG  LVP    = OFF           ; RB5 como pin normal
         CONFIG  PBADEN = OFF           ; PORTB inicia como digital
         CONFIG  MCLRE  = OFF           ; MCLR como entrada digital
         CONFIG  XINST  = OFF           ; Sin instrucciones extendidas
         CONFIG  PWRT   = ON            ; Encendido más estable
 
 ;--------------------------------------------------------
-; Reservamos memoria para el retardo
-; Mejora: ahora usamos variables en RAM para controlar
-; el tiempo del parpadeo.
+; Reservamos memoria para el retardo y la variable
+; que controlará qué secuencia está activa.
 ;--------------------------------------------------------
         PSECT udata_acs
-Delay1: DS 1        ; Primer contador 
-Delay2: DS 1        ; Segundo contador 
+Delay1:    DS 1          ; Contador lento del retardo
+Delay2:    DS 1          ; Contador rápido del retardo
+Secuencia: DS 1          ; Guarda qué modo está activo
 
 ;--------------------------------------------------------
-; Vector de reinicio
+; Vector de inicio del programa
 ;--------------------------------------------------------
         PSECT resetVec,class=CODE,reloc=2
         ORG 0x00
         GOTO INIT
 
 ;========================================================
-; Inicialización del sistema
+; Inicialización
 ;========================================================
 INIT:
 
-        ; Configuramos el oscilador interno 
-        ; Esto define la velocidad de ejecución del programa
+        ; Configuramos el oscilador interno a 8 MHz
         MOVLW   0b01110010
         MOVWF   OSCCON, a
 
@@ -51,46 +53,90 @@ INIT:
         MOVLW   0x0F
         MOVWF   ADCON1, a
 
-        ; Configuramos todo PORTD como salida
-        ; mejora: ahora iniciamos LATD para empezar apagado
+        ; PORTD como salida (donde están los LEDs)
         CLRF    TRISD, a
         CLRF    LATD, a
 
+        ; RB0 como entrada (botón)
+        BSF     TRISB,0,a
+
+        ; Iniciamos en la secuencia 0
+        CLRF    Secuencia, a
+
+        ; Encendemos el primer LED como punto inicial
+        MOVLW   0x01
+        MOVWF   LATD, a
+
 ;========================================================
-; Mejora: ahora usamos BSF y BCF para modificar solo
-; el bit 0 sin afectar los demás pines del puerto.
+; Programa principal
 ;========================================================
 MAIN:
 
-        BSF     LATD,0,a     ; Encendemos el LED (RD0 = 1)
-        CALL    RETARDO      
+        ; Si se presiona el botón RB0,
+        ; cambiamos el valor de la variable Secuencia
+        BTFSS   PORTB,0,a
+        INCF    Secuencia,F,a
 
-        BCF     LATD,0,a     ; Apagamos el LED (RD0 = 0)
-        CALL    RETARDO      
-
-        GOTO MAIN           
+        ; Solo usamos el bit 0 de la variable,
+        ; así alternamos entre 0 y 1 (dos modos)
+        MOVF    Secuencia,W,a
+        ANDLW   0x01
+        BZ      SEQ0       ; Si es 0 → movimiento
+        GOTO    SEQ1       ; Si es 1 → Parpadeo
 
 ;========================================================
-; Mejora : el tiempo se controla con
-; contadores anidados, lo que permite generar una pausa
-; visible sin usar temporizadores internos.
+; SECUENCIA 0 : movimiento  de LEDs
+;========================================================
+SEQ0:
+
+        CALL RETARDO       ; Esperamos antes de mover
+
+        ; Rotamos el contenido hacia la izquierda
+        ; Esto mueve el LED encendido al siguiente
+        RLCF LATD,F,a
+
+        ; Si el corrimiento llega a RD4,
+        ; reiniciamos en RD0
+        BTFSC LATD,4,a
+        MOVLW 0x01
+        MOVWF LATD,a
+
+        GOTO MAIN
+
+;========================================================
+; SECUENCIA 1 : Parpadeo 
+;========================================================
+SEQ1:
+
+        ; Encendemos los 4 LEDs
+        MOVLW 0x0F
+        MOVWF LATD,a
+        CALL RETARDO
+
+        ; Apagamos todos
+        CLRF LATD,a
+        CALL RETARDO
+
+        GOTO MAIN
+
+;========================================================
+; Se usan dos contadores anidados para generar una
+; pausa visible sin usar temporizadores internos.
 ;========================================================
 RETARDO:
 
-        MOVLW   200          ; Valor inicial del contador 
+        MOVLW   200
         MOVWF   Delay1,a
 
 D1:
-        MOVLW   255          ; Valor inicial del contador rápido
+        MOVLW   255
         MOVWF   Delay2,a
-
 D2:
-        DECFSZ  Delay2,F,a   ; disminuye Delay2
-        GOTO    D2           ; Si no es cero, sigue contando
+        DECFSZ  Delay2,F,a
+        GOTO    D2
+        DECFSZ  Delay1,F,a
+        GOTO    D1
 
-        DECFSZ  Delay1,F,a   ; Cuando Delay2 llega a 0,
-        GOTO    D1           ; disminuye Delay1 y repite
-
-        RETURN               ; Cuando los dos llegan a 0, regresa
+        RETURN
 
         END 
