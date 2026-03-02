@@ -1,177 +1,135 @@
-#include <xc.inc>                 ; Incluye definiciones de registros/bits para el PIC seleccionado (PIC18F4550)
+        CONFIG  FOSC   = INTOSCIO_EC
+        CONFIG  WDT    = OFF
+        CONFIG  LVP    = OFF
+        CONFIG  PBADEN = OFF
+        CONFIG  MCLRE  = ON
 
-;============================================================
+        #include <xc.inc>
 
-PSECT udata_acs                   ; Sección de datos en “Access RAM”
-blinkCnt:   DS 1                  ; Reservar 1 byte: contador de parpadeos (5 o 2)
-ovfCnt:     DS 1                  ; Reservar 1 byte: contador de overflows de Timer1
+;================ RAM (Access Bank) =========================
+        PSECT   udata_acs
+cnt1:       ds  1        ; para delay_1ms
+msL:        ds  1        ; contador 16-bit para ms (low)
+msH:        ds  1        ; contador 16-bit para ms (high)
+blinkCnt:   ds  1        ; contador de parpadeos
 
-
-PSECT resetVec, class=CODE, reloc=2 ; Sección de código para el vector de reset
+;================ Reset vector ==============================
+        PSECT   resetVec,class=CODE,reloc=2
 resetVec:
-    GOTO main                     
+        goto    start
 
-;------------------------
-; código
-;------------------------
-PSECT code                        
+;================ Code ======================================
+        PSECT   code,class=CODE,reloc=2
+start:
+        ;---- Oscilador interno 8 MHz ----
+        BANKSEL OSCCON
+        movlw   0x72              ; IRCF=111 (8MHz), SCS=10
+        movwf   OSCCON, b
 
-main:
-    
-    MOVLW 0x72                    
-    MOVWF OSCCON, a               
+        ;---- Todo digital ----
+        BANKSEL ADCON1
+        movlw   0x0F
+        movwf   ADCON1, b
 
-    MOVLW 0x0F                    ; WREG = 0x0F
-    MOVWF ADCON1, a               ; ADCON1 = 0x0F (todo digital)
+        BANKSEL CMCON
+        movlw   0x07
+        movwf   CMCON, b
 
-    ;--------------------------------------------------------
-    ; Configurar RB0 como salida para el LED
-    ;--------------------------------------------------------
-    CLRF LATB, a                  ; LATB = 0 (apaga todo PORTB para iniciar seguro)
-    BCF  TRISB, 0, a              ; TRISB0 = 0 -> RB0 es SALIDA (0 salida, 1 entrada)
+        ;---- LED en RB0 (salida) ----
+        BANKSEL TRISB
+        bcf     TRISB, 0, b
 
-    ;--------------------------------------------------------
-    ;  Configurar Timer1 para hacer delays
-    ;--------------------------------------------------------
-    
-    MOVLW 0xB0                    ; 0xB0 = 1011 0000b (RD16=1, presc=1:8, off)
-    MOVWF T1CON, a                ; T1CON = 0xB0
+        BANKSEL LATB
+        bcf     LATB, 0, b
 
-;============================================================
-; Bucle principal
-;============================================================
-MainLoop:
-    ;--------------------------------------------------------
-    ; FASE A: 5 parpadeos de 1 segundo ON + 1 segundo OFF
-    
-    ;--------------------------------------------------------
-    MOVLW 5                       ; WREG = 5
-    MOVWF blinkCnt, a             ; blinkCnt = 5 (contador de repeticiones)
-
-Blink1s:
-    BSF  LATB, 0, a               ; LATB0 = 1 -> LED ON
-    CALL Delay1s                  ; Esperar 1 segundo
-    BCF  LATB, 0, a               ; LATB0 = 0 -> LED OFF
-    CALL Delay1s                  ; Esperar 1 segundo
-
-    DECFSZ blinkCnt, f, a         ; blinkCnt = blinkCnt - 1; si llega a 0, salta la próxima instrucción
-    BRA Blink1s                   ; Si NO llegó a 0, repetir otro parpadeo
-
-    ;--------------------------------------------------------
-    ; FASE B: 2 parpadeos de 2 segundos ON + 2 segundos OFF
-    ;--------------------------------------------------------
-    MOVLW 2                       ; WREG = 2
-    MOVWF blinkCnt, a             ; blinkCnt = 2
-
-Blink2s:
-    BSF  LATB, 0, a               ; LED ON
-    CALL Delay2s                  ; Esperar 2 segundos
-    BCF  LATB, 0, a               ; LED OFF
-    CALL Delay2s                  ; Esperar 2 segundos
-
-    DECFSZ blinkCnt, f, a         ; Decrementa contador y verifica cero
-    BRA Blink2s                   ; Si no es cero, repetir
-
-    BRA MainLoop                  ; Regresa al inicio de la secuencia (bucle infinito)
+;================ Main loop =================================
+main_loop:
+        call    blink_5x_1s       ; 5 parpadeos (1s ON/1s OFF) = 10s
+        call    blink_2x_2s       ; 2 parpadeos (2s ON/2s OFF)
+        goto    main_loop
 
 ;============================================================
-; Delay1s:
-; Genera 1 segundo exacto usando Timer1 (polling, sin interrupciones)
-;
-; Parámetros del tiempo:
-;  Fosc = 8 MHz
-;  Finst = Fosc/4 = 2 MHz
-;  Prescaler 1:8 -> tick = 2MHz/8 = 250k ticks/seg
-;  Periodo tick = 4 us
-;  1 s = 250,000 ticks
-;
-; Estrategia:
-;  - Cargamos TMR1 con un valor inicial (precarga) para que el
-;    primer overflow ocurra tras cierta cantidad de ticks.
-;  - Luego esperamos 3 overflows completos adicionales.
-;
-
-;  Conteo hasta overflow = 65536 - 0x2F70 = 53392 ticks
-;  Tiempo = 53392 * 4us = 0.213568s
-;  Faltante hasta 1s = 1 - 0.213568 = 0.786432s
-;  Cada overflow completo = 65536 ticks = 0.262144s
-;  3 overflows = 0.786432s
-;  Total = 1.000000s exacto
+;  Rutinas de parpadeo
 ;============================================================
-Delay1s:
-    BCF  T1CON, 0, a              ; bit0 (TMR1ON)=0 -> apaga Timer1 para cargar TMR1H/TMR1L
 
-    MOVLW 0x2F                    ; WREG = 0x2F (byte alto de precarga)
-    MOVWF TMR1H, a                ; TMR1H = 0x2F
-    MOVLW 0x70                    ; WREG = 0x70 (byte bajo de precarga)
-    MOVWF TMR1L, a                ; TMR1L = 0x70
+;--- 5 parpadeos de 1s ON / 1s OFF ---
+blink_5x_1s:
+        movlw   5
+        movwf   blinkCnt, a
+b5_loop:
+        call    blink_1s
+        decfsz  blinkCnt, f, a
+        goto    b5_loop
+        return
 
-    BCF  PIR1, 0, a               ; PIR1 bit0 (TMR1IF)=0 -> limpia bandera de overflow de Timer1
-    BSF  T1CON, 0, a              ; TMR1ON=1 -> enciende Timer1 y empieza a contar
+;--- 2 parpadeos de 2s ON / 2s OFF ---
+blink_2x_2s:
+        movlw   2
+        movwf   blinkCnt, a
+b2_loop:
+        call    blink_2s
+        decfsz  blinkCnt, f, a
+        goto    b2_loop
+        return
 
-;--- Esperar el primer overflow (parcial desde 0x2F70 hasta 0xFFFF) ---
-D1_First:
-    BTFSS PIR1, 0, a              ; ¿TMR1IF=1? (si está en 1, hubo overflow)
-    BRA   D1_First                ; Si aún no overflow, seguir esperando (polling)
-    BCF   PIR1, 0, a              ; Limpia TMR1IF para contar el siguiente overflow
+;--- Un parpadeo: 1s ON, 1s OFF ---
+blink_1s:
+        BANKSEL LATB
+        bsf     LATB, 0, b
+        call    delay_1s
+        BANKSEL LATB
+        bcf     LATB, 0, b
+        call    delay_1s
+        return
 
-;--- Esperar 3 overflows completos 
-    MOVLW 3                       ; WREG = 3
-    MOVWF ovfCnt, a               ; ovfCnt = 3 (contador de overflows completos)
-
-D1_Full:
-    BTFSS PIR1, 0, a              ; ¿Ya overflow?
-    BRA   D1_Full                 ; No -> esperar
-    BCF   PIR1, 0, a              ; Sí -> limpia bandera
-
-    DECFSZ ovfCnt, f, a           ; ovfCnt-- ; si llegó a 0, salir
-    BRA   D1_Full                 ; Si faltan overflows, repetir espera
-
-    BCF  T1CON, 0, a              ; Apaga Timer1 (buena práctica)
-    RETURN                        ; Regresa a la rutina que llamó Delay1s
+;--- Un parpadeo: 2s ON, 2s OFF ---
+blink_2s:
+        BANKSEL LATB
+        bsf     LATB, 0, b
+        call    delay_2s
+        BANKSEL LATB
+        bcf     LATB, 0, b
+        call    delay_2s
+        return
 
 ;============================================================
-; Delay2s:
-; Similar a Delay1s, pero total = 2 segundos exactos
-;
-; 2 s = 500,000 ticks (con tick=4us)
-;
-; Precarga 0x5EE0:
-;  Conteo hasta overflow = 65536 - 0x5EE0 = 41248 ticks
-;  Tiempo parcial = 41248*4us = 0.164992s
-;  Overflows completos necesarios: 7 * 0.262144s = 1.835008s
-;  Total = 0.164992 + 1.835008 = 2.000000s exacto
+;  Delays (software)
 ;============================================================
-Delay2s:
-    BCF  T1CON, 0, a              ; Apaga Timer1 para cargar precarga
 
-    MOVLW 0x5E                    ; Byte alto precarga
-    MOVWF TMR1H, a                ; Carga TMR1H
-    MOVLW 0xE0                    ; Byte bajo precarga
-    MOVWF TMR1L, a                ; Carga TMR1L
+;--- delay_2s = 2 * delay_1s ---
+delay_2s:
+        call    delay_1s
+        call    delay_1s
+        return
 
-    BCF  PIR1, 0, a               ; Limpia bandera TMR1IF
-    BSF  T1CON, 0, a              ; Enciende Timer1
+;--- delay_1s = 1000 * delay_1ms (contador 16-bit) ---
+delay_1s:
+        movlw   0xE8          ; 1000 = 0x03E8
+        movwf   msL, a
+        movlw   0x03
+        movwf   msH, a
+d1s_loop:
+        call    delay_1ms
 
-;--- Primer overflow parcial ---
-D2_First:
-    BTFSS PIR1, 0, a              ; Esperar TMR1IF=1
-    BRA   D2_First
-    BCF   PIR1, 0, a              ; Limpia bandera
+        ; downcounter 16-bit (msH:msL)
+        decfsz  msL, f, a
+        goto    d1s_loop
+        decfsz  msH, f, a
+        goto    d1s_loop
 
-;--- 7 overflows completos ---
-    MOVLW 7                       ; WREG=7
-    MOVWF ovfCnt, a               ; ovfCnt=7
+        return
 
-D2_Full:
-    BTFSS PIR1, 0, a              ; ¿Overflow?
-    BRA   D2_Full                 ; No -> esperar
-    BCF   PIR1, 0, a              ; Sí -> limpiar
+;--- delay ~1ms (aprox para 8MHz interno) ---
+delay_1ms:
+        movlw   250
+        movwf   cnt1, a
+d1ms_loop:
+        nop
+        nop
+        nop
+        nop
+        decfsz  cnt1, f, a
+        goto    d1ms_loop
+        return
 
-    DECFSZ ovfCnt, f, a           ; ovfCnt-- y si es 0 sale
-    BRA   D2_Full
-
-    BCF  T1CON, 0, a              ; Apaga Timer1
-    RETURN                        ; Retorna
-
-END resetVec                      ; Fin del programa (indica el punto de entrada/reset)
+        END     resetVec
