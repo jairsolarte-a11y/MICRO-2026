@@ -1,225 +1,273 @@
 ;========================================================
-; 4 Secuencias de LEDS con dos botones
-; PIC18F4550 – 8 MHz interno
-; RB0 cambia la secuencia
-; RB1 aumenta la velocidad
-; Los LEDS están conectados en RD0–RD3
+; PIC18F4550 - 4 Secuencias LEDs Mejorado
+; XC8 v3.x - pic-as
+; RB0 = Cambia secuencia (INT0)
+; RB1 = Cambia velocidad
+; RD0-RD3 = LEDs
 ;========================================================
 
-        #include <xc.inc>
+#include <xc.inc>
 
 ;--------------------------------------------------------
-; Configuración básica del micro
-; Aquí le decimos cómo debe arrancar
+; CONFIG
 ;--------------------------------------------------------
 
-        CONFIG  FOSC   = INTOSCIO_EC   ; Usamos el oscilador interno
-        CONFIG  WDT    = OFF           ; Quitamos el Watchdog
-        CONFIG  LVP    = OFF           ; Sin programación a bajo voltaje
-        CONFIG  PBADEN = OFF           ; PORTB como digital
-        CONFIG  MCLRE  = OFF           ; MCLR como pin digital
-        CONFIG  XINST  = OFF
-        CONFIG  PWRT   = ON            ; Pequeña espera al encender
+CONFIG  FOSC = INTOSCIO_EC
+CONFIG  WDT = OFF
+CONFIG  LVP = OFF
+CONFIG  PBADEN = OFF
+CONFIG  MCLRE = OFF
+CONFIG  XINST = OFF
+CONFIG  PWRT = ON
 
 ;--------------------------------------------------------
-; Variables en RAM
+; VARIABLES
 ;--------------------------------------------------------
 
-        PSECT udata_acs
-
-Secuencia: DS 1      ; Guarda qué efecto está activo (0–3)
-Velocidad: DS 1      ; Controla qué tan rápido se mueven los LEDS
-Delay1:    DS 1      ; Variables internas del retardo
-Delay2:    DS 1
-Direccion: DS 1      ; 0 = izquierda, 1 = derecha (para rebote)
+PSECT udata_acs
+Secuencia:  DS 1
+Velocidad:  DS 1
+Delay1:     DS 1
+Delay2:     DS 1
+Delay3:     DS 1
+Direccion:  DS 1
 
 ;--------------------------------------------------------
-; Vectores importantes
+; VECTORES
 ;--------------------------------------------------------
 
-        PSECT resetVec,class=CODE,reloc=2
-        ORG 0x00
-        GOTO INIT     ; Cuando el PIC enciende viene aquí
+PSECT resetVec,class=CODE,reloc=2
+ORG 0x00
+GOTO INIT
 
-        PSECT intVec,class=CODE,reloc=2
-        ORG 0x08
-        GOTO ISR      ; Si ocurre INT0 viene aquí
+PSECT intVec,class=CODE,reloc=2
+ORG 0x08
+GOTO ISR
+
+;--------------------------------------------------------
+; PROGRAMA
+;--------------------------------------------------------
+
+PSECT code
 
 ;========================================================
-; Inicialización
+; INIT
 ;========================================================
 
 INIT:
 
-        ; Configuramos el oscilador interno a 8 MHz
-        MOVLW   0b01110010
-        MOVWF   OSCCON, a
+    MOVLW   0x72
+    MOVWF   OSCCON
 
-        ; Nos aseguramos de que todo sea digital
-        MOVLW   0x0F
-        MOVWF   ADCON1, a
+    MOVLW   0x0F
+    MOVWF   ADCON1
 
-        ; Empezamos en la secuencia 0
-        CLRF    Secuencia, a
+    CLRF    Secuencia
+    MOVLW   8          ; empieza lento
+    MOVWF   Velocidad
+    CLRF    Direccion
 
-        ; Velocidad inicial media
-        MOVLW   5
-        MOVWF   Velocidad, a
+    CLRF    TRISD
+    CLRF    LATD
 
-        ; Dirección inicial hacia la izquierda
-        CLRF    Direccion, a
+    BSF     TRISB,0
+    BSF     TRISB,1
 
-        ; PORTD como salida (ahí están los LEDs)
-        CLRF    TRISD, a
-        CLRF    LATD, a      ; Todos apagados al inicio
-
-        ; Configuramos los botones
-        BSF     TRISB,0,a    ; RB0 como entrada (INT0)
-        BSF     TRISB,1,a    ; RB1 como entrada (velocidad)
-
-        ; Configuración de la interrupción INT0
-        BCF     INTCON2,6,a  ; Interrupción por flanco de bajada
-        BCF     INTCON,1,a   ; Limpiamos bandera
-        BSF     INTCON,4,a   ; Habilitamos INT0
-        BSF     INTCON,7,a   ; Habilitamos interrupciones globales
+    BCF     INTCON2,7      ; pullups ON
+    BCF     INTCON2,6      ; flanco bajada INT0
+    BCF     INTCON,1       ; limpia bandera
+    BSF     INTCON,4       ; habilita INT0
+    BSF     INTCON,7       ; global
 
 ;========================================================
-; Bucle principal
+; MAIN
 ;========================================================
 
 MAIN:
 
-        ; Miramos qué secuencia está activa
-        MOVF    Secuencia,W,a
-        ANDLW   0x03         ; Solo permitimos valores de 0 a 3
+    MOVF    Secuencia,W
+    ANDLW   0x03
+    MOVWF   Secuencia
 
-        ; Dependiendo del valor saltamos al efecto
-        BZ      SEQ0
-        DECF    WREG,W
-        BZ      SEQ1
-        DECF    WREG,W
-        BZ      SEQ2
-        GOTO    SEQ3
+    MOVF    Secuencia,W
+    BZ      SEQ0
+
+    MOVLW   1
+    CPFSEQ  Secuencia
+    GOTO    CHECK2
+    GOTO    SEQ1
+
+CHECK2:
+    MOVLW   2
+    CPFSEQ  Secuencia
+    GOTO    SEQ3
+    GOTO    SEQ2
 
 ;========================================================
-; SECUENCIA 0 – Corrimiento hacia la izquierda continuo
+; SECUENCIA 0 (Corrimiento simple)
 ;========================================================
 
 SEQ0:
-        ; Si todos están apagados empezamos con el primero
-        MOVF    LATD,W,a
-        BNZ     CONT0
-        MOVLW   0x01
-        MOVWF   LATD,a
+    MOVF    LATD,W
+    ANDLW   0x0F
+    BNZ     S0_CONT
 
-CONT0:
-        CALL    RETARDO      ; Esperamos un poco
-        RLCF    LATD,F,a     ; Movemos el LED a la izquierda
-        GOTO    MAIN
+    MOVLW   0x01
+    MOVWF   LATD
+
+S0_CONT:
+    CALL    RETARDO
+    RLCF    LATD,F
+    MOVF    LATD,W
+    ANDLW   0x0F
+    MOVWF   LATD
+    GOTO    MAIN
 
 ;========================================================
-; SECUENCIA 1 – Rebote tipo ping-pong
+; SECUENCIA 1 (Ping Pong)
 ;========================================================
 
 SEQ1:
-        ; Si está apagado, iniciamos en el primero
-        MOVF    LATD,W,a
-        BNZ     CONT1
-        MOVLW   0x01
-        MOVWF   LATD,a
+    MOVF    LATD,W
+    ANDLW   0x0F
+    BNZ     S1_CONT
 
-CONT1:
-        CALL    RETARDO
+    MOVLW   0x01
+    MOVWF   LATD
 
-        ; Revisamos la dirección
-        MOVF    Direccion,W,a
-        BZ      IZQUIERDA
+S1_CONT:
+    CALL    RETARDO
 
-DERECHA:
-        RRCF    LATD,F,a
-        ; Si llegó al primer LED cambiamos dirección
-        BTFSC   LATD,0,a
-        CLRF    Direccion,a
-        GOTO    MAIN
+    MOVF    Direccion,W
+    BZ      IZQ
 
-IZQUIERDA:
-        RLCF    LATD,F,a
-        ; Si llegó al último LED cambiamos dirección
-        BTFSC   LATD,3,a
-        MOVLW   1
-        MOVWF   Direccion,a
-        GOTO    MAIN
+DER:
+    RRCF    LATD,F
+    BTFSC   LATD,0
+    CLRF    Direccion
+    GOTO    AJUSTE
+
+IZQ:
+    RLCF    LATD,F
+    BTFSC   LATD,3
+    MOVLW   1
+    MOVWF   Direccion
+
+AJUSTE:
+    MOVF    LATD,W
+    ANDLW   0x0F
+    MOVWF   LATD
+    GOTO    MAIN
 
 ;========================================================
-; SECUENCIA 2 – Parpadeo total
+; SECUENCIA 2 (Todos ON/OFF)
 ;========================================================
 
 SEQ2:
-        MOVLW   0x0F         ; Encendemos todos
-        MOVWF   LATD,a
-        CALL    RETARDO
-
-        CLRF    LATD,a       ; Apagamos todos
-        CALL    RETARDO
-        GOTO    MAIN
+    MOVLW   0x0F
+    MOVWF   LATD
+    CALL    RETARDO
+    CLRF    LATD
+    CALL    RETARDO
+    GOTO    MAIN
 
 ;========================================================
-; SECUENCIA 3 – Conteo binario
+; SECUENCIA 3 (Contador binario)
 ;========================================================
 
 SEQ3:
-        INCF    LATD,F,a     ; Sumamos 1 al valor mostrado
-        CALL    RETARDO
-        GOTO    MAIN
+    INCF    LATD,F
+    MOVF    LATD,W
+    ANDLW   0x0F
+    MOVWF   LATD
+    CALL    RETARDO
+    GOTO    MAIN
 
 ;========================================================
-; Interrupción – Cambio de secuencia
+; ISR INT0
 ;========================================================
 
 ISR:
-        ; Verificamos que realmente fue INT0
-        BTFSS   INTCON,1,a
-        RETFIE
+    BTFSS   INTCON,1
+    RETFIE
 
-        BCF     INTCON,1,a   ; Limpiamos
-        INCF    Secuencia,F,a ; Pasamos a la siguiente secuencia
+    BCF     INTCON,1
+    CALL    ANTIRREBOTE
 
-        RETFIE               ; Volvemos al programa principal
+    BTFSS   PORTB,0
+    GOTO    CAMBIO
+    RETFIE
+
+CAMBIO:
+    INCF    Secuencia,F
+    CLRF    LATD
+    RETFIE
 
 ;========================================================
-; Retardo con control de velocidad
+; RETARDO PRINCIPAL (Visible)
 ;========================================================
 
 RETARDO:
 
-        ; Si se presiona RB1 aumentamos velocidad (máx 10)
-        BTFSS   PORTB,1,a
-        CALL    AUMENTAR
+    ; Botón velocidad
+    BTFSS   PORTB,1
+    CALL    CAMBIAR_VEL
 
-        MOVF    Velocidad,W,a
-        MOVWF   Delay1,a
+    MOVF    Velocidad,W
+    MOVWF   Delay1
 
 D1:
-        MOVLW   255
-        MOVWF   Delay2,a
+    MOVLW   255
+    MOVWF   Delay2
 D2:
-        DECFSZ  Delay2,F,a
-        GOTO    D2
-        DECFSZ  Delay1,F,a
-        GOTO    D1
+    MOVLW   255
+    MOVWF   Delay3
+D3:
+    DECFSZ  Delay3,F
+    GOTO    D3
 
-        RETURN
+    DECFSZ  Delay2,F
+    GOTO    D2
 
-;--------------------------------------------------------
-; Aumenta velocidad hasta un límite
-;--------------------------------------------------------
+    DECFSZ  Delay1,F
+    GOTO    D1
 
-AUMENTAR:
-        MOVF    Velocidad,W,a
-        SUBLW   10
-        BZ      SALIR        ; Si ya está en 10 no sube más
-        INCF    Velocidad,F,a
-SALIR:
-        RETURN
+    RETURN
 
-        END 
+;========================================================
+; CAMBIAR VELOCIDAD (1–10)
+;========================================================
+
+CAMBIAR_VEL:
+    CALL    ANTIRREBOTE
+
+    MOVF    Velocidad,W
+    SUBLW   1
+    BZ      RESETVEL
+
+    DECF    Velocidad,F
+    RETURN
+
+RESETVEL:
+    MOVLW   10
+    MOVWF   Velocidad
+    RETURN
+
+;========================================================
+; ANTIRREBOTE
+;========================================================
+
+ANTIRREBOTE:
+    MOVLW   40
+    MOVWF   Delay1
+R1:
+    MOVLW   255
+    MOVWF   Delay2
+R2:
+    DECFSZ  Delay2,F
+    GOTO    R2
+    DECFSZ  Delay1,F
+    GOTO    R1
+    RETURN
+
+END  
