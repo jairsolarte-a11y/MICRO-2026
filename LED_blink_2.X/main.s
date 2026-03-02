@@ -1,4 +1,5 @@
-        CONFIG  FOSC   = INTOSCIO_EC
+       ;segundo cambio
+    CONFIG  FOSC   = INTOSCIO_EC
         CONFIG  WDT    = OFF
         CONFIG  LVP    = OFF
         CONFIG  PBADEN = OFF
@@ -96,17 +97,30 @@ blink_2s:
 ;  Delays (software)
 ;============================================================
 
-;--- delay_2s = 2 * delay_1s ---
+;--- delay_2s (ANTES = 2 * delay_1s) ---
 delay_2s:
-        call    delay_1s
-        call    delay_1s
+        ; [CAMBIO] Ahora: 2200 ms fijos (0x0898), para que sea 2.2 s
+        movlw   0x98          ; 2200 = 0x0898
+        movwf   msL, a
+        movlw   0x08
+        movwf   msH, a
+d2s_loop:
+        call    delay_1ms
+
+        ; downcounter 16-bit (msH:msL)
+        decfsz  msL, f, a
+        goto    d2s_loop
+        decfsz  msH, f, a
+        goto    d2s_loop
+
         return
 
-;--- delay_1s = 1000 * delay_1ms (contador 16-bit) ---
+;--- delay_1s (ANTES = 1000 * delay_1ms) ---
 delay_1s:
-        movlw   0xE8          ; 1000 = 0x03E8
+        ; [CAMBIO] Antes: 1000 ms (0x03E8). Ahora: 1200 ms (0x04B0), para 1.2 s
+        movlw   0xB0          ; 1200 = 0x04B0
         movwf   msL, a
-        movlw   0x03
+        movlw   0x04
         movwf   msH, a
 d1s_loop:
         call    delay_1ms
