@@ -28,10 +28,11 @@ PSECT udata_acs              ; Sección donde se guardan variables
 Secuencia:  DS 1             ; Guarda número de secuencia (0-3)
 Velocidad:  DS 1             ; 0=lenta, 1=media, 2=rapida
 Direccion:  DS 1             ; Control de rebote izquierda/derecha
+BtnBack:    DS 1             ; Control de retroceso
 BtnState:   DS 1             ; Control lógico para anti-rebote
 Delay1:     DS 1             ; Contador externo del retardo
 Delay2:     DS 1             ; Contador intermedio del retardo
-Delay3:     DS 1             ; Contador interno del retardo
+Delay3:     DS 1             ; Contador interno del retardo 
 
 
 ;======================
