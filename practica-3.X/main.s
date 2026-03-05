@@ -103,8 +103,9 @@ INIT:
 
 MAIN:
 
+    CALL    CHECK_BACK       ; Revisa boton de retroceso
     CALL    CHECK_VEL        ; Revisa botón de velocidad
-
+    
     MOVF    Secuencia,W      ; Pasa Secuencia a W
     ANDLW   0b00000011       ; Limita valor entre 0 y 3
     MOVWF   Secuencia        ; Guarda valor corregido
@@ -201,6 +202,47 @@ ISR:
     MOVLW   0b00000001
     MOVWF   LATD             ; Reinicia LED inicial
     RETFIE
+
+;======================
+; BOTON RETROCESO (RB2)
+;======================
+
+CHECK_BACK:
+    BTFSC PORTB,2       ; Revisa el estado del pin RB2
+                        ; Si RB2 = 1 significa que el botón está suelto
+    GOTO RELEASE_B      ; Si está suelto salta a la etiqueta RELEASE_B
+
+    MOVF BtnBack,W      ; Mueve el estado anterior del botón a W
+    BZ END_BACK         ; Si BtnBack = 0 significa que ya se procesó
+                        ; la pulsación anterior, entonces no hace nada
+
+    CLRF BtnBack        ; Cambia el estado del botón a 0
+                        ; Esto indica que ya se detectó la pulsación
+
+    DECF Secuencia,F    ; DECREMENTA la variable Secuencia
+                        ; Esto hace que el programa pase
+                        ; a la secuencia anterior
+
+    MOVLW 0xFF          ; Si Secuencia era 0
+                        ; al restar queda en 255 (0xFF)
+
+    CPFSEQ Secuencia    ; Compara si Secuencia = 0xFF
+    GOTO END_BACK       ; Si no es 255, termina
+
+    MOVLW 0b00000011    ; Si era 0 y se decrementó
+                        ; se fuerza a la secuencia 3
+
+    MOVWF Secuencia     ; Guarda el valor 3 en Secuencia
+
+END_BACK:
+    RETURN              ; Regresa al programa principal
+
+
+RELEASE_B:
+    MOVLW 0b00000001    ; Si el botón está suelto
+    MOVWF BtnBack       ; se reinicia el estado del botón
+                        ; permitiendo detectar la próxima pulsación
+    RETURN 
 
 
 ;======================
