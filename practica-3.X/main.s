@@ -43,6 +43,7 @@ PSECT resetVec,class=CODE,reloc=2
 ORG 0x00                     ; Dirección donde inicia el programa
     GOTO INIT                ; Salta a la inicialización
 
+    PSECT code
 
 ;======================
 ; VECTOR DE INTERRUPCIÓN
@@ -77,6 +78,8 @@ INIT:
     CLRF    Direccion        ; Dirección inicial izquierda
     MOVLW   0b00000001
     MOVWF   BtnState         ; Botón inicia liberado
+    MOVLW   0b00000001
+    MOVWF   BtnBack          ; Botón de retroceso
 
     CLRF    TRISD            ; PORTD como salida
     CLRF    LATD             ; Apaga todos los LEDs
@@ -85,7 +88,8 @@ INIT:
 
     BSF     TRISB,0          ; RB0 como entrada
     BSF     TRISB,1          ; RB1 como entrada
-
+    BSF     TRISB,2          ; RB2 como entrada 
+    
     BCF     INTCON2,7        ; Activa pull-ups internos
     BCF     INTCON2,6        ; INT0 por flanco descendente
     BCF     INTCON,1         ; Limpia bandera INT0
